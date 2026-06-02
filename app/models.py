@@ -8,10 +8,10 @@ _DOMAIN_RE = re.compile(
     r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
 )
 
-# Max FQDN length per RFC 1035
 _MAX_ELEMENT_LEN = 253
-# Cap temporary entries at 1 year
 _MAX_DURATION_SECONDS = 31_536_000
+_MAX_SOURCE_LEN = 64
+_MAX_COMMENT_LEN = 512
 
 
 class FeedCreate(BaseModel):
@@ -19,6 +19,8 @@ class FeedCreate(BaseModel):
     data_type: Literal["ip", "cidr", "domain"]
     entry_type: Literal["permanent", "temporary"]
     duration_seconds: Optional[int] = Field(None, ge=1, le=_MAX_DURATION_SECONDS)
+    source: str = Field("manual", max_length=_MAX_SOURCE_LEN)
+    comment: Optional[str] = Field(None, max_length=_MAX_COMMENT_LEN)
 
     @model_validator(mode="after")
     def _validate(self) -> "FeedCreate":
@@ -49,26 +51,29 @@ class FeedDelete(BaseModel):
     element: str = Field(..., max_length=_MAX_ELEMENT_LEN)
 
 
-class HistoryItem(BaseModel):
-    element: str
-    data_type: str
-    occurrences_count: int
-    last_seen: str
-
-
-class HistoryResponse(BaseModel):
-    total: int
-    items: list[HistoryItem]
-
+# ── Feed responses ────────────────────────────────────────────────────────────
 
 class FeedResponse(BaseModel):
     element: str
     data_type: str
     entry_type: str
+    source: str
+    comment: Optional[str]
     occurrences_count: int
     promoted_to_permanent: bool
     message: Optional[str] = None
 
+
+class FeedDetailItem(BaseModel):
+    element: str
+    data_type: str
+    entry_type: str
+    source: str
+    comment: Optional[str]
+    expires_at: Optional[str]
+
+
+# ── Bulk ──────────────────────────────────────────────────────────────────────
 
 class FeedBulkCreate(BaseModel):
     items: list[FeedCreate]
@@ -86,6 +91,7 @@ class BulkFeedResult(BaseModel):
     element: str
     data_type: str
     entry_type: str
+    source: str
     occurrences_count: int
     promoted_to_permanent: bool
     error: Optional[str] = None
@@ -96,6 +102,72 @@ class BulkFeedResponse(BaseModel):
     failed: int
     results: list[BulkFeedResult]
 
+
+# ── History ───────────────────────────────────────────────────────────────────
+
+class HistoryItem(BaseModel):
+    element: str
+    data_type: str
+    occurrences_count: int
+    last_seen: str
+
+
+class HistoryResponse(BaseModel):
+    total: int
+    items: list[HistoryItem]
+
+
+# ── Lookup ────────────────────────────────────────────────────────────────────
+
+class LookupFeedInfo(BaseModel):
+    data_type: str
+    entry_type: str
+    source: str
+    comment: Optional[str]
+    expires_at: Optional[str]
+    created_at: str
+    active: bool
+
+
+class LookupHistoryInfo(BaseModel):
+    occurrences_count: int
+    last_seen: str
+
+
+class LookupResponse(BaseModel):
+    element: str
+    found: bool
+    feed: Optional[LookupFeedInfo] = None
+    history: Optional[LookupHistoryInfo] = None
+
+
+# ── Import from URL ───────────────────────────────────────────────────────────
+
+class ImportFromUrl(BaseModel):
+    url: str = Field(..., max_length=2048)
+    data_type: Literal["ip", "domain"]
+    entry_type: Literal["permanent", "temporary"] = "permanent"
+    duration_seconds: Optional[int] = Field(None, ge=1, le=_MAX_DURATION_SECONDS)
+    source: str = Field(..., max_length=_MAX_SOURCE_LEN)
+    comment: Optional[str] = Field(None, max_length=_MAX_COMMENT_LEN)
+
+    @model_validator(mode="after")
+    def _check_duration(self) -> "ImportFromUrl":
+        if self.entry_type == "temporary" and self.duration_seconds is None:
+            raise ValueError("duration_seconds required for temporary imports")
+        return self
+
+
+class ImportResponse(BaseModel):
+    url: str
+    source: str
+    inserted: int
+    skipped_duplicate: int
+    skipped_invalid: int
+    total_parsed: int
+
+
+# ── Stats ─────────────────────────────────────────────────────────────────────
 
 class FeedTypeStats(BaseModel):
     permanent: int
