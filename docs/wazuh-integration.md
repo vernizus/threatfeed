@@ -56,6 +56,13 @@ chown root:wazuh /var/ossec/active-response/bin/threatfeed-add-domain.sh
 cat > /var/ossec/etc/threatfeed.conf << 'EOF'
 THREATFEED_HOST="http://10.0.0.X:8000"
 THREATFEED_API_KEY="tu-clave-aqui"
+
+# Ventana de deduplicacion en segundos (default: 300 = 5 minutos).
+# Si el mismo elemento se reporta dentro de esta ventana, se ignora.
+# Evita que una rafaga de alertas del mismo ataque suba el contador
+# varias veces y promueva la IP a permanent en un solo incidente.
+# Poner a 0 para desactivar la deduplicacion.
+THREATFEED_DEDUP_WINDOW="300"
 EOF
 
 chmod 640 /var/ossec/etc/threatfeed.conf

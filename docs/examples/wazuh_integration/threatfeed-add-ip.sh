@@ -10,25 +10,26 @@
 #   chmod 750 /var/ossec/active-response/bin/threatfeed-add-ip.sh
 #   chown root:wazuh /var/ossec/active-response/bin/threatfeed-add-ip.sh
 #
-# Configuracion (crear este fichero en el manager):
-#   /var/ossec/etc/threatfeed.conf
-#   chmod 640  /var/ossec/etc/threatfeed.conf
-#   chown root:wazuh /var/ossec/etc/threatfeed.conf
-#
-#   Contenido de threatfeed.conf:
-#     THREATFEED_HOST="http://10.0.0.100:8000"
-#     THREATFEED_API_KEY="tu-clave-aqui"
+# Configuracion — /var/ossec/etc/threatfeed.conf:
+#   THREATFEED_HOST="http://10.0.0.100:8000"
+#   THREATFEED_API_KEY="tu-clave-aqui"
+#   THREATFEED_DEDUP_WINDOW="300"   # segundos entre reportes del mismo elemento
+#                                   # Evita que una rafaga de alertas del mismo
+#                                   # ataque suba el contador varias veces y
+#                                   # promueva la IP a permanent de golpe.
+#                                   # Default: 300s (5 min). 0 = dedup desactivado.
 #
 # Logica de duracion (igual que los AR existentes):
 #   Nivel  < 14  → temporary 3600s  (1 hora)
 #   Nivel >= 14  → temporary 86400s (24 horas)
-#   Nivel >= 14 + reincidencia >= THRESHOLD → promovido a permanent por el servicio
+#   Reincidencias >= THRESHOLD_PROMOTION → promovido a permanent por el servicio
 # =============================================================================
 
 set -euo pipefail
 
 CONF_FILE="/var/ossec/etc/threatfeed.conf"
 LOG_FILE="/var/ossec/logs/active-responses.log"
+DEDUP_DIR="/tmp/threatfeed_dedup"
 SCRIPT="threatfeed-add-ip"
 
 log() {
@@ -37,7 +38,7 @@ log() {
 
 # ── Leer configuracion ────────────────────────────────────────────────────────
 if [[ ! -f "$CONF_FILE" ]]; then
-    log "ERROR: $CONF_FILE no encontrado. Crear el fichero con THREATFEED_HOST y THREATFEED_API_KEY."
+    log "ERROR: $CONF_FILE no encontrado."
     exit 1
 fi
 # shellcheck source=/dev/null
@@ -48,6 +49,8 @@ if [[ -z "${THREATFEED_HOST:-}" || -z "${THREATFEED_API_KEY:-}" ]]; then
     exit 1
 fi
 
+DEDUP_WINDOW="${THREATFEED_DEDUP_WINDOW:-300}"
+
 # ── Leer JSON del alert desde stdin ──────────────────────────────────────────
 INPUT=$(cat)
 
@@ -57,19 +60,16 @@ d = json.load(sys.stdin)
 print(d.get('command', 'add'))
 " 2>/dev/null || echo "add")
 
-# Solo procesar el bloqueo, no la eliminacion (el TTL lo gestiona el Threat Feed)
+# Solo procesar el bloqueo — el TTL lo gestiona el Threat Feed de forma nativa
 if [[ "$ACTION" != "add" ]]; then
-    log "Accion '$ACTION' ignorada (el Threat Feed gestiona TTL de forma nativa)"
     exit 0
 fi
 
-# ── Extraer IP y nivel de alerta ──────────────────────────────────────────────
+# ── Extraer IP y metadatos del alert ─────────────────────────────────────────
 SRCIP=$(echo "$INPUT" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-alert = d.get('parameters', {}).get('alert', {})
-data  = alert.get('data', {})
-# Intentar varios campos en orden de prioridad
+data = d.get('parameters', {}).get('alert', {}).get('data', {})
 for field in ('srcip', 'src_ip', 'win.eventdata.sourceIp', 'agent.ip'):
     val = data
     for key in field.split('.'):
@@ -103,13 +103,35 @@ if [[ -z "$SRCIP" ]]; then
     exit 0
 fi
 
-# Validar que es una IP valida
 if ! python3 -c "import ipaddress; ipaddress.ip_address('$SRCIP')" 2>/dev/null; then
     log "Valor '$SRCIP' no es una IP valida. Saliendo."
     exit 0
 fi
 
-# ── Calcular duracion segun nivel (igual que AR existentes) ──────────────────
+# ── Deduplicacion por ventana de tiempo ───────────────────────────────────────
+# Problema: un ataque de fuerza bruta genera decenas de alertas en segundos.
+# Sin dedup, cada alerta incrementaria el contador y la IP podria quedar
+# permanente en una sola rafaga. La ventana garantiza que el contador solo
+# sube UNA VEZ por incidente, no una vez por alerta individual.
+if (( DEDUP_WINDOW > 0 )); then
+    mkdir -p "$DEDUP_DIR"
+    find "$DEDUP_DIR" -mmin +1440 -delete 2>/dev/null || true  # limpiar entradas >24h
+
+    DEDUP_KEY=$(printf '%s' "$SRCIP" | md5sum | cut -d' ' -f1)
+    DEDUP_FILE="$DEDUP_DIR/ip_$DEDUP_KEY"
+
+    if [[ -f "$DEDUP_FILE" ]]; then
+        LAST_SENT=$(cat "$DEDUP_FILE" 2>/dev/null || echo 0)
+        NOW=$(date +%s)
+        ELAPSED=$(( NOW - LAST_SENT ))
+        if (( ELAPSED < DEDUP_WINDOW )); then
+            log "DEDUP: $SRCIP ignorada (reportada hace ${ELAPSED}s, ventana=${DEDUP_WINDOW}s | regla=$RULE_ID)"
+            exit 0
+        fi
+    fi
+fi
+
+# ── Calcular duracion segun nivel ────────────────────────────────────────────
 if (( LEVEL >= 14 )); then
     DURATION=86400
     DURATION_LABEL="24h"
@@ -133,7 +155,8 @@ print(json.dumps({
 }))
 ")
 
-HTTP_STATUS=$(curl -s -o /tmp/threatfeed_response_$$.json -w "%{http_code}" \
+RESP_FILE="/tmp/threatfeed_response_$$.json"
+HTTP_STATUS=$(curl -s -o "$RESP_FILE" -w "%{http_code}" \
     --max-time 10 \
     -X POST "$THREATFEED_HOST/api/feed" \
     -H "X-API-Key: $THREATFEED_API_KEY" \
@@ -143,20 +166,24 @@ HTTP_STATUS=$(curl -s -o /tmp/threatfeed_response_$$.json -w "%{http_code}" \
 if [[ "$HTTP_STATUS" == "200" ]]; then
     OCCURRENCES=$(python3 -c "
 import json
-with open('/tmp/threatfeed_response_$$.json') as f:
-    d = json.load(f)
+with open('$RESP_FILE') as f: d = json.load(f)
 print(d.get('occurrences_count', '?'))
     " 2>/dev/null || echo "?")
     PROMOTED=$(python3 -c "
 import json
-with open('/tmp/threatfeed_response_$$.json') as f:
-    d = json.load(f)
-print('PROMOVIDA A PERMANENTE' if d.get('promoted_to_permanent') else '')
+with open('$RESP_FILE') as f: d = json.load(f)
+print('| PROMOVIDA A PERMANENTE' if d.get('promoted_to_permanent') else '')
     " 2>/dev/null || echo "")
+
     log "OK: $SRCIP → temporary $DURATION_LABEL | ocurrencias=$OCCURRENCES | regla=$RULE_ID $PROMOTED"
+
+    # Actualizar timestamp de dedup solo tras exito
+    if (( DEDUP_WINDOW > 0 )); then
+        date +%s > "$DEDUP_FILE"
+    fi
 else
     log "ERROR HTTP $HTTP_STATUS: $SRCIP | regla=$RULE_ID"
 fi
 
-rm -f "/tmp/threatfeed_response_$$.json"
+rm -f "$RESP_FILE"
 exit 0

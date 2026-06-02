@@ -10,20 +10,23 @@
 #   chmod 750 /var/ossec/active-response/bin/threatfeed-add-domain.sh
 #   chown root:wazuh /var/ossec/active-response/bin/threatfeed-add-domain.sh
 #
-# Requiere el mismo /var/ossec/etc/threatfeed.conf que threatfeed-add-ip.sh
+# Requiere /var/ossec/etc/threatfeed.conf (igual que threatfeed-add-ip.sh)
+# THREATFEED_DEDUP_WINDOW aplica igual — evita que una rafaga de consultas DNS
+# al mismo dominio suba el contador multiples veces en el mismo incidente.
 #
 # Campos donde se busca el dominio (en orden de prioridad):
 #   data.win.eventdata.queryName  → Sysmon Event ID 22 (DNS query)
 #   data.dns.question.name        → Suricata dns
 #   data.query                    → decoders genericos
 #   data.hostname                 → varios decoders
-#   data.url                      → extrae host de la URL
+#   data.url / data.http.url      → extrae host de la URL
 # =============================================================================
 
 set -euo pipefail
 
 CONF_FILE="/var/ossec/etc/threatfeed.conf"
 LOG_FILE="/var/ossec/logs/active-responses.log"
+DEDUP_DIR="/tmp/threatfeed_dedup"
 SCRIPT="threatfeed-add-domain"
 
 log() {
@@ -43,6 +46,8 @@ if [[ -z "${THREATFEED_HOST:-}" || -z "${THREATFEED_API_KEY:-}" ]]; then
     exit 1
 fi
 
+DEDUP_WINDOW="${THREATFEED_DEDUP_WINDOW:-300}"
+
 # ── Leer JSON del alert desde stdin ──────────────────────────────────────────
 INPUT=$(cat)
 
@@ -53,7 +58,6 @@ print(d.get('command', 'add'))
 " 2>/dev/null || echo "add")
 
 if [[ "$ACTION" != "add" ]]; then
-    log "Accion '$ACTION' ignorada"
     exit 0
 fi
 
@@ -76,7 +80,6 @@ d     = json.load(sys.stdin)
 alert = d.get('parameters', {}).get('alert', {})
 data  = alert.get('data', {})
 
-# Campos a probar en orden de prioridad
 candidates = [
     data.get('win', {}).get('eventdata', {}).get('queryName', ''),
     data.get('dns', {}).get('question', {}).get('name', ''),
@@ -114,12 +117,30 @@ print(d.get('parameters', {}).get('alert', {}).get('rule', {}).get('description'
 " 2>/dev/null || echo "")
 
 if [[ -z "$DOMAIN" ]]; then
-    log "No se encontro dominio en el alert (regla $RULE_ID). Campos buscados: queryName, dns.question.name, query, hostname, url."
+    log "No se encontro dominio en el alert (regla $RULE_ID)."
     exit 0
 fi
 
-# ── Los dominios del ar_block_domain van como PERMANENT ───────────────────────
-# (bloqueo de dominio = decisión deliberada, sin TTL en el AR original)
+# ── Deduplicacion por ventana de tiempo ───────────────────────────────────────
+if (( DEDUP_WINDOW > 0 )); then
+    mkdir -p "$DEDUP_DIR"
+    find "$DEDUP_DIR" -mmin +1440 -delete 2>/dev/null || true
+
+    DEDUP_KEY=$(printf '%s' "$DOMAIN" | md5sum | cut -d' ' -f1)
+    DEDUP_FILE="$DEDUP_DIR/dom_$DEDUP_KEY"
+
+    if [[ -f "$DEDUP_FILE" ]]; then
+        LAST_SENT=$(cat "$DEDUP_FILE" 2>/dev/null || echo 0)
+        NOW=$(date +%s)
+        ELAPSED=$(( NOW - LAST_SENT ))
+        if (( ELAPSED < DEDUP_WINDOW )); then
+            log "DEDUP: $DOMAIN ignorado (reportado hace ${ELAPSED}s, ventana=${DEDUP_WINDOW}s | regla=$RULE_ID)"
+            exit 0
+        fi
+    fi
+fi
+
+# ── Enviar al Threat Feed Service ─────────────────────────────────────────────
 COMMENT="Wazuh AR | Regla $RULE_ID (nivel $LEVEL) | $RULE_DESC"
 
 PAYLOAD=$(python3 -c "
@@ -133,7 +154,8 @@ print(json.dumps({
 }))
 ")
 
-HTTP_STATUS=$(curl -s -o /tmp/threatfeed_dom_response_$$.json -w "%{http_code}" \
+RESP_FILE="/tmp/threatfeed_dom_response_$$.json"
+HTTP_STATUS=$(curl -s -o "$RESP_FILE" -w "%{http_code}" \
     --max-time 10 \
     -X POST "$THREATFEED_HOST/api/feed" \
     -H "X-API-Key: $THREATFEED_API_KEY" \
@@ -143,14 +165,18 @@ HTTP_STATUS=$(curl -s -o /tmp/threatfeed_dom_response_$$.json -w "%{http_code}" 
 if [[ "$HTTP_STATUS" == "200" ]]; then
     OCCURRENCES=$(python3 -c "
 import json
-with open('/tmp/threatfeed_dom_response_$$.json') as f:
-    d = json.load(f)
+with open('$RESP_FILE') as f: d = json.load(f)
 print(d.get('occurrences_count', '?'))
     " 2>/dev/null || echo "?")
+
     log "OK: $DOMAIN → permanent | ocurrencias=$OCCURRENCES | regla=$RULE_ID"
+
+    if (( DEDUP_WINDOW > 0 )); then
+        date +%s > "$DEDUP_FILE"
+    fi
 else
     log "ERROR HTTP $HTTP_STATUS: $DOMAIN | regla=$RULE_ID"
 fi
 
-rm -f "/tmp/threatfeed_dom_response_$$.json"
+rm -f "$RESP_FILE"
 exit 0
