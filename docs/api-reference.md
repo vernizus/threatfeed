@@ -33,7 +33,7 @@ Swagger interactivo: `http://<host>:8000/docs` (solo con `DEBUG=true`).
 
 Devuelven `text/plain`, un elemento por línea.  
 Compatibles con cualquier firewall que soporte External Block Lists HTTP:
-FortiGate, Cisco ASA/FTD, MikroTik (address-list), pfSense, OPNsense, Squid, nginx geo, etc.
+FortiGate, Cisco FTD/ASA, MikroTik, pfSense, OPNsense, Squid, nginx y cualquier firewall con soporte de listas HTTP.
 
 ### `GET /feed/ip/active`
 

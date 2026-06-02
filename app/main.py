@@ -70,7 +70,7 @@ app = FastAPI(
     description=(
         "IP/CIDR/Domain threat feed with reputation history, automatic permanence promotion, "
         "source tracking, and plain-text output compatible with any firewall "
-        "(FortiGate, Cisco, MikroTik, pfSense, Squid…)."
+        "(firewall, Cisco, MikroTik, pfSense, Squid…)."
     ),
     lifespan=lifespan,
     docs_url="/docs" if _DEBUG else None,
@@ -156,7 +156,7 @@ def _feed_response(
 
 
 # ── Public feed endpoints ─────────────────────────────────────────────────────
-# Plain text by default — consumable by ANY firewall (FortiGate, Cisco ACL,
+# Plain text by default — consumable by ANY firewall (firewall, Cisco ACL,
 # MikroTik address-list, pfSense, Squid, nginx geo…).
 #
 # Add ?detail=true + X-API-Key to get JSON with source/comment (SOC tools).

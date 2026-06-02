@@ -78,9 +78,9 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
-    # Feeds públicos — solo desde FortiGate y sistemas autorizados
+    # Feeds públicos — solo desde firewalls y sistemas autorizados
     location /feed/ {
-        allow 192.168.1.1;    # IP del FortiGate
+        allow 192.168.1.1;    # IP del firewall
         allow 10.0.0.0/24;    # Red de gestión SOC
         deny  all;
         proxy_pass http://threatfeed:8000;
@@ -185,16 +185,16 @@ curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/stats
 
 ---
 
-## Configurar FortiGate External Connectors
+## Configurar el firewall
 
-Con el servicio en marcha, configurar los conectores en FortiGate:
+Con el servicio en marcha, apuntar el firewall a los endpoints de feed:
 
-| Conector | URI | Refresh |
-|----------|-----|---------|
+| Feed | URI | Refresh |
+|------|-----|---------|
 | IPs/CIDRs | `https://threatfeed.interno/feed/ip/active` | 5 min |
 | Dominios | `https://threatfeed.interno/feed/domain/active` | 5 min |
 
-Ver [fortinet-integration.md](fortinet-integration.md) para la configuración completa.
+Ver [firewall-integration.md](firewall-integration.md) para la configuración específica de cada firewall (FortiGate, Cisco, MikroTik, pfSense, Squid, nginx).
 
 ---
 
@@ -232,13 +232,13 @@ Causas comunes:
 - `API_KEY` no definida en `.env` → el compose falla con el mensaje de error configurado
 - Puerto 8000 ocupado → cambiar `ports` en `docker-compose.yml`
 
-### FortiGate no recibe la lista
+### El firewall no recibe la lista
 
-1. Verificar que el endpoint responde desde la IP del FortiGate:
+1. Verificar que el endpoint responde desde la IP del firewall:
    ```bash
    curl -v https://threatfeed.interno/feed/ip/active
    ```
-2. Revisar que nginx permite la IP del FortiGate en el bloque `/feed/`
+2. Revisar que nginx permite la IP del firewall en el bloque `/feed/`
 3. En FortiGate: `diagnose threat-feed update ThreatFeed-IPs`
 
 ### `[seed]` no aparece en los logs

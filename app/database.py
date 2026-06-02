@@ -177,7 +177,7 @@ def delete_feed(element: str) -> bool:
         return cursor.rowcount > 0
 
 
-# ── Plain-text feed queries (FortiGate) ───────────────────────────────────────
+# ── Plain-text feed queries (firewall consumable) ────────────────────────────
 
 def _active_where(ph: str) -> str:
     return (

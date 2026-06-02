@@ -4,29 +4,34 @@ Microservicio REST que gestiona listas de bloqueo (IPs, CIDRs, Dominios) con sis
 
 ## Casos de uso
 
-- **FortiGate External Block List**: los endpoints `/feed/*/active` devuelven texto plano listo para consumir desde External Connectors de FortiOS.
-- **Cualquier firewall con threat feed HTTP**: Palo Alto, pfSense/OPNsense, Squid, nginx geo-block, etc.
+- **Firewall External Block List**: los endpoints `/feed/*/active` devuelven texto plano compatible con FortiGate, Cisco FTD, MikroTik, pfSense, OPNsense, Squid, nginx y cualquier firewall con soporte de listas HTTP.
+- **Automatización SOC**: alimentar el servicio desde alertas de Wazuh, SIEM events, o MISP para bloqueo automático.
 - **Automatización SOC**: alimentar el servicio desde alertas de Wazuh, SIEM events, o MISP para bloqueo automático.
 
 ## Estructura de archivos
 
 ```
-iplistfw/
+threatfeed/
 ├── app/
 │   ├── main.py         # FastAPI — rutas y lógica HTTP
 │   ├── database.py     # SQLite — operaciones y control de concurrencia
 │   └── models.py       # Pydantic — validación de entrada/salida
+├── build/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── requirements.txt
+│   ├── .env.example
+│   └── seeds/          # IPs y dominios maliciosos conocidos (seed inicial)
 ├── docs/
 │   ├── README.md       # Este archivo
+│   ├── deploy.md
 │   ├── api-reference.md
 │   ├── environment-variables.md
-│   ├── fortinet-integration.md
+│   ├── firewall-integration.md
 │   └── examples/
+│       ├── curl-examples.txt
 │       ├── bulk-import.sh
-│       └── wazuh-ar-integration.sh
-├── requirements.txt
-├── Dockerfile
-└── docker-compose.yml
+│       └── wazuh_integration/
 ```
 
 ## Arranque rápido
@@ -84,4 +89,5 @@ La documentación interactiva (Swagger UI) está disponible en `http://localhost
 - [deploy.md](deploy.md) — Despliegue básico, producción con nginx+TLS, operaciones y troubleshooting
 - [api-reference.md](api-reference.md) — Todos los endpoints con ejemplos curl
 - [environment-variables.md](environment-variables.md) — Referencia completa de variables de entorno
-- [fortinet-integration.md](fortinet-integration.md) — Integración con FortiGate External Connectors
+- [firewall-integration.md](firewall-integration.md) — Integración con firewalls (FortiGate, Cisco, MikroTik, pfSense, Squid, nginx)
+- [wazuh-integration.md](wazuh-integration.md) — Integración con Wazuh Active Response

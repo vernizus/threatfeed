@@ -2,7 +2,7 @@
 
 Microservicio REST de listas de bloqueo dinámicas (IPs, CIDRs, Dominios) con sistema de reputación histórico, promoción automática y salida en texto plano compatible con cualquier firewall que soporte External Block Lists HTTP.
 
-> **Integra con Wazuh, FortiGate, Cisco, MikroTik, pfSense, Squid y cualquier firewall con soporte de listas de bloqueo HTTP.**
+> **Integra con Wazuh, firewall, Cisco, MikroTik, pfSense, Squid y cualquier firewall con soporte de listas de bloqueo HTTP.**
 
 ## Características
 
@@ -28,7 +28,7 @@ Wazuh detecta ataque
             ↓
         Threat Feed Service (IP temporal / dominio permanente)
             ↓
-        FortiGate recoge el bloqueo en el siguiente refresh (5 min)
+        firewall recoge el bloqueo en el siguiente refresh (5 min)
 ```
 
 - `ar_block` → IP entra como **temporary** (1h nivel <14, 24h nivel ≥14)
@@ -37,7 +37,7 @@ Wazuh detecta ataque
 
 Ver [`docs/examples/wazuh_integration/`](docs/examples/wazuh_integration/) para scripts y snippet `ossec.conf` listos para desplegar.
 
-### FortiGate External Block List
+### firewall External Block List
 
 ```
 Security Fabric > External Connectors > Threat Feed
@@ -54,7 +54,7 @@ Los endpoints de feed devuelven texto plano, un elemento por línea — el forma
 
 | Firewall | Dónde configurar |
 |----------|-----------------|
-| **FortiGate** | Security Fabric > External Connectors |
+| **firewall** | Security Fabric > External Connectors |
 | **Cisco FTD/ASA** | Security Intelligence > Network / URL feeds |
 | **MikroTik** | IP > Firewall > Address List (script de descarga) |
 | **pfSense/OPNsense** | Firewall > Aliases > URL Table |
@@ -64,7 +64,7 @@ Los endpoints de feed devuelven texto plano, un elemento por línea — el forma
 ## Estructura
 
 ```
-iplistfw/
+threatfeed/
 ├── app/                          # Código fuente (FastAPI)
 │   ├── main.py
 │   ├── database.py
@@ -134,5 +134,6 @@ Ver [`docs/environment-variables.md`](docs/environment-variables.md) para refere
 - [Despliegue](docs/deploy.md)
 - [API Reference](docs/api-reference.md)
 - [Variables de entorno](docs/environment-variables.md)
-- [Integración FortiGate](docs/fortinet-integration.md)
-- [Integración Wazuh AR](docs/examples/wazuh_integration/)
+- [Integración Firewalls](docs/firewall-integration.md)
+- [Integración Wazuh](docs/wazuh-integration.md)
+- [Integración Wazuh AR — scripts](docs/examples/wazuh_integration/)
