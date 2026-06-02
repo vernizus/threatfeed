@@ -1,0 +1,334 @@
+# =============================================================================
+# Threat Feed Service — Ejemplos curl completos
+# =============================================================================
+# Ajusta HOST y API_KEY antes de ejecutar:
+#
+#   export HOST=http://localhost:8000
+#   export API_KEY=tu-clave-aqui
+# =============================================================================
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HEALTH
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Estado del servicio
+curl $HOST/health
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEEDS — texto plano (consumo por firewalls)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# IPs activas (permanentes + temporales no expiradas)
+curl $HOST/feed/ip/active
+
+# Solo IPs permanentes
+curl $HOST/feed/ip/permanent
+
+# Solo IPs temporales no expiradas
+curl $HOST/feed/ip/temporary
+
+# Dominios activos
+curl $HOST/feed/domain/active
+
+# Solo dominios permanentes
+curl $HOST/feed/domain/permanent
+
+# Solo dominios temporales no expirados
+curl $HOST/feed/domain/temporary
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEEDS — modo detail (JSON con source y comment, para herramientas SOC)
+# Requiere X-API-Key
+# ─────────────────────────────────────────────────────────────────────────────
+
+curl "$HOST/feed/ip/active?detail=true" \
+  -H "X-API-Key: $API_KEY"
+
+curl "$HOST/feed/ip/permanent?detail=true" \
+  -H "X-API-Key: $API_KEY"
+
+curl "$HOST/feed/ip/temporary?detail=true" \
+  -H "X-API-Key: $API_KEY"
+
+curl "$HOST/feed/domain/active?detail=true" \
+  -H "X-API-Key: $API_KEY"
+
+curl "$HOST/feed/domain/permanent?detail=true" \
+  -H "X-API-Key: $API_KEY"
+
+curl "$HOST/feed/domain/temporary?detail=true" \
+  -H "X-API-Key: $API_KEY"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOOKUP — consulta de un elemento
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Sin API key — solo devuelve si está bloqueado (true/false)
+curl "$HOST/api/feed/lookup?element=1.2.3.4"
+
+# Con API key — estado completo + historial
+curl "$HOST/api/feed/lookup?element=1.2.3.4" \
+  -H "X-API-Key: $API_KEY"
+
+# Consultar un CIDR
+curl "$HOST/api/feed/lookup?element=185.220.101.0%2F24" \
+  -H "X-API-Key: $API_KEY"
+
+# Consultar un dominio
+curl "$HOST/api/feed/lookup?element=evil.example.com" \
+  -H "X-API-Key: $API_KEY"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /api/feed — añadir elementos individuales
+# ─────────────────────────────────────────────────────────────────────────────
+
+# IP permanente — mínimo
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element":"1.2.3.4","data_type":"ip","entry_type":"permanent"}'
+
+# IP permanente con source y comment
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "element": "1.2.3.4",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "manual",
+    "comment": "C2 confirmado en investigacion IR-2026-042"
+  }'
+
+# IP temporal — 1 hora (3600 s) desde Wazuh Active Response
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "element": "5.6.7.8",
+    "data_type": "ip",
+    "entry_type": "temporary",
+    "duration_seconds": 3600,
+    "source": "wazuh-ar",
+    "comment": "Brute force SSH detectado por regla 5763"
+  }'
+
+# IP temporal — 24 horas
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element":"9.10.11.12","data_type":"ip","entry_type":"temporary","duration_seconds":86400,"source":"n8n"}'
+
+# CIDR permanente
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "element": "185.220.101.0/24",
+    "data_type": "cidr",
+    "entry_type": "permanent",
+    "source": "manual",
+    "comment": "Tor exit nodes range"
+  }'
+
+# Dominio permanente
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "element": "c2.badactor.net",
+    "data_type": "domain",
+    "entry_type": "permanent",
+    "source": "misp",
+    "comment": "Cobalt Strike C2 — evento MISP #1234"
+  }'
+
+# Dominio temporal — 48 horas
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "element": "phishing.example.com",
+    "data_type": "domain",
+    "entry_type": "temporary",
+    "duration_seconds": 172800,
+    "source": "openphish",
+    "comment": "Phishing activo detectado — pendiente verificacion"
+  }'
+
+# Actualizar solo source y comment de una entrada permanente existente
+curl -X POST $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "element": "1.2.3.4",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "manual",
+    "comment": "Actualizado: confirmado C2 TrickBot segun informe Talos"
+  }'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /api/feed/bulk — importacion masiva (max 500 elementos)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Bulk mixto — IPs y dominios en una sola peticion
+curl -X POST $HOST/api/feed/bulk \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {"element": "10.0.0.1", "data_type": "ip", "entry_type": "permanent", "source": "manual"},
+      {"element": "10.0.0.2", "data_type": "ip", "entry_type": "permanent", "source": "manual"},
+      {"element": "192.168.100.0/24", "data_type": "cidr", "entry_type": "permanent", "source": "manual", "comment": "Segmento comprometido"},
+      {"element": "malware.ejemplo.com", "data_type": "domain", "entry_type": "permanent", "source": "misp"},
+      {"element": "phishing.ejemplo.com", "data_type": "domain", "entry_type": "temporary", "duration_seconds": 86400, "source": "openphish"}
+    ]
+  }'
+
+# Bulk temporal — todos con el mismo TTL (desde script de respuesta a incidentes)
+curl -X POST $HOST/api/feed/bulk \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {"element": "1.1.1.100", "data_type": "ip", "entry_type": "temporary", "duration_seconds": 3600, "source": "wazuh-ar", "comment": "IR-2026-050"},
+      {"element": "2.2.2.200", "data_type": "ip", "entry_type": "temporary", "duration_seconds": 3600, "source": "wazuh-ar", "comment": "IR-2026-050"},
+      {"element": "3.3.3.3",   "data_type": "ip", "entry_type": "temporary", "duration_seconds": 3600, "source": "wazuh-ar", "comment": "IR-2026-050"}
+    ]
+  }'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /api/feed/import — descargar feed remoto desde URL
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Feodo Tracker — C2 botnet IPs (abuse.ch) — GRATUITO, sin registro
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.txt",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "feodo",
+    "comment": "Feodo Tracker C2 blocklist (abuse.ch)"
+  }'
+
+# Feodo Tracker recommended (solo IPs de alta confianza)
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "feodo-recommended",
+    "comment": "Feodo Tracker — high-confidence C2 IPs"
+  }'
+
+# Emerging Threats compromised IPs
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "emerging-threats",
+    "comment": "Emerging Threats compromised hosts"
+  }'
+
+# Binary Defense Artillery feed
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://www.binarydefense.com/banlist.txt",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "binarydefense",
+    "comment": "Binary Defense Artillery threat intelligence"
+  }'
+
+# Blocklist.de — all
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://lists.blocklist.de/lists/all.txt",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "blocklist-de",
+    "comment": "Blocklist.de — attack reporters"
+  }'
+
+# CI Army (CINS Score)
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://cinsscore.com/list/ci-badguys.txt",
+    "data_type": "ip",
+    "entry_type": "permanent",
+    "source": "ci-army",
+    "comment": "CI Army CINS Score threat feed"
+  }'
+
+# Import temporal — IPs que expiran en 7 dias (604800 s)
+curl -X POST $HOST/api/feed/import \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.txt",
+    "data_type": "ip",
+    "entry_type": "temporary",
+    "duration_seconds": 604800,
+    "source": "feodo-temp",
+    "comment": "Feodo — TTL 7 dias para revision posterior"
+  }'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DELETE /api/feed — eliminar elementos
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Eliminar una IP
+curl -X DELETE $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element": "1.2.3.4"}'
+
+# Eliminar un CIDR
+curl -X DELETE $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element": "185.220.101.0/24"}'
+
+# Eliminar un dominio
+curl -X DELETE $HOST/api/feed \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element": "c2.badactor.net"}'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /feed/history — historial de reincidencias
+# ─────────────────────────────────────────────────────────────────────────────
+
+curl $HOST/feed/history \
+  -H "X-API-Key: $API_KEY"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /api/stats — estadisticas del servicio
+# ─────────────────────────────────────────────────────────────────────────────
+
+curl $HOST/api/stats \
+  -H "X-API-Key: $API_KEY"
