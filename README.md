@@ -46,7 +46,7 @@ Security Fabric > External Connectors > Threat Feed
   Refresh: 5 min
 ```
 
-Ver [`docs/fortinet-integration.md`](docs/fortinet-integration.md) para configuración completa CLI/GUI.
+Ver [`docs/firewall-integration.md`](docs/fortinet-integration.md) para configuración completa CLI/GUI.
 
 ### Otros firewalls
 
