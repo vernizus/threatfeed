@@ -1,0 +1,69 @@
+<!--
+  =============================================================================
+  Threat Feed Service — Integración Wazuh Active Response
+  =============================================================================
+  Añadir este bloque al ossec.conf del MANAGER (dentro de <ossec_config>).
+  Los scripts deben estar en /var/ossec/active-response/bin/ en el manager.
+
+  Flujo:
+    Regla con grupo ar_block       → threatfeed-add-ip.sh     (IP  → temporary)
+    Regla con grupo ar_block_domain → threatfeed-add-domain.sh (Dom → permanent)
+
+  Ambos scripts leen /var/ossec/etc/threatfeed.conf:
+    THREATFEED_HOST="http://<host>:8000"
+    THREATFEED_API_KEY="<clave>"
+
+  Permisos de despliegue:
+    chmod 750  /var/ossec/active-response/bin/threatfeed-add-ip.sh
+    chmod 750  /var/ossec/active-response/bin/threatfeed-add-domain.sh
+    chown root:wazuh /var/ossec/active-response/bin/threatfeed-add-ip.sh
+    chown root:wazuh /var/ossec/active-response/bin/threatfeed-add-domain.sh
+    chmod 640  /var/ossec/etc/threatfeed.conf
+    chown root:wazuh /var/ossec/etc/threatfeed.conf
+  =============================================================================
+-->
+
+<ossec_config>
+
+  <!-- ── Comandos Threat Feed ──────────────────────────────────────────────── -->
+
+  <!-- Bloqueo de IP: envía srcip al Threat Feed como temporary -->
+  <command>
+    <name>threatfeed-add-ip</name>
+    <executable>threatfeed-add-ip.sh</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+
+  <!-- Bloqueo de dominio: envía el dominio al Threat Feed como permanent -->
+  <command>
+    <name>threatfeed-add-domain</name>
+    <executable>threatfeed-add-domain.sh</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+
+  <!-- ── Active Response — IPs ─────────────────────────────────────────────── -->
+  <!--
+    Se dispara en el MANAGER cuando cualquier regla del grupo ar_block se activa.
+    Corre en paralelo con el AR que bloquea en el agente (netsh, block-ip-inbound…).
+    timeout_allowed:no porque el TTL lo gestiona el Threat Feed de forma nativa.
+  -->
+  <active-response>
+    <disabled>no</disabled>
+    <command>threatfeed-add-ip</command>
+    <location>server</location>
+    <rules_group>ar_block</rules_group>
+  </active-response>
+
+  <!-- ── Active Response — Dominios ───────────────────────────────────────── -->
+  <!--
+    Se dispara cuando una regla del grupo ar_block_domain se activa.
+    Los dominios se añaden como permanent (igual que el AR original sin timeout).
+  -->
+  <active-response>
+    <disabled>no</disabled>
+    <command>threatfeed-add-domain</command>
+    <location>server</location>
+    <rules_group>ar_block_domain</rules_group>
+  </active-response>
+
+</ossec_config>
