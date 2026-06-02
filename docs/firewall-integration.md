@@ -98,26 +98,88 @@ diagnose threat-feed update ThreatFeed-IPs
 
 ## MikroTik — Address List
 
-MikroTik no tiene feed HTTP nativo — se usa un script que descarga la lista y la importa cada 30 minutos.
+MikroTik no tiene feed HTTP nativo pero su scripting permite descargarlo y aplicarlo automáticamente. El resultado es una Address List dinámica que se puede referenciar en cualquier regla de firewall.
+
+### Script de descarga e importación
 
 ```routeros
-/system scheduler add name="ThreatFeed-Update" interval=00:30:00 \
-  on-event="/system script run ThreatFeedUpdate"
-
 /system script add name="ThreatFeedUpdate" source={
-  :local url "http://<host>:8000/feed/ip/active"
-  :local listname "ThreatFeed"
-  /ip firewall address-list remove [find list=$listname]
-  :local data [/tool fetch url=$url as-value output=user]
-  :foreach line in=[:toarray ($data->"data")] do={
+  :local urlIPs     "http://<host>:8000/feed/ip/active"
+  :local urlDomains "http://<host>:8000/feed/domain/active"
+  :local listIPs     "ThreatFeed-IPs"
+  :local listDomains "ThreatFeed-Domains"
+
+  # ── Actualizar IPs ──────────────────────────────────────────────────────────
+  :local dataIPs [/tool fetch url=$urlIPs as-value output=user]
+  /ip firewall address-list remove [find list=$listIPs]
+  :foreach line in=[:toarray ($dataIPs->"data")] do={
     :if ($line != "") do={
-      /ip firewall address-list add list=$listname address=$line
+      :do {
+        /ip firewall address-list add list=$listIPs address=$line \
+          comment="ThreatFeed auto" timeout=0
+      } on-error={ }
     }
   }
-}
 
-# Regla de bloqueo
-/ip firewall filter add chain=forward src-address-list=ThreatFeed action=drop comment="ThreatFeed"
+  # ── Actualizar Dominios (DNS static) ────────────────────────────────────────
+  :local dataDom [/tool fetch url=$urlDomains as-value output=user]
+  /ip dns static remove [find comment="ThreatFeed-domain"]
+  :foreach line in=[:toarray ($dataDom->"data")] do={
+    :if ($line != "") do={
+      :do {
+        /ip dns static add name=$line address=0.0.0.0 \
+          comment="ThreatFeed-domain" ttl=00:30:00
+      } on-error={ }
+    }
+  }
+
+  :log info "ThreatFeed: listas actualizadas"
+}
+```
+
+### Scheduler — actualización automática cada 30 minutos
+
+```routeros
+/system scheduler add \
+  name="ThreatFeed-Update" \
+  interval=00:30:00 \
+  on-event="/system script run ThreatFeedUpdate" \
+  comment="Actualiza listas ThreatFeed"
+```
+
+### Reglas de firewall
+
+```routeros
+# Bloquear tráfico de entrada desde IPs maliciosas
+/ip firewall filter add \
+  chain=input \
+  src-address-list=ThreatFeed-IPs \
+  action=drop \
+  comment="ThreatFeed — block inbound" \
+  place-before=0
+
+# Bloquear tráfico de salida hacia IPs maliciosas
+/ip firewall filter add \
+  chain=forward \
+  dst-address-list=ThreatFeed-IPs \
+  action=drop \
+  comment="ThreatFeed — block forward" \
+  place-before=0
+```
+
+> Los dominios se bloquean via DNS static resolviendo a `0.0.0.0`. Requiere que el MikroTik actúe como DNS de los clientes (`/ip dns set allow-remote-requests=yes`).
+
+### Ejecución manual inmediata
+
+```routeros
+/system script run ThreatFeedUpdate
+```
+
+### Verificar listas cargadas
+
+```routeros
+/ip firewall address-list print where list=ThreatFeed-IPs
+/ip dns static print where comment~"ThreatFeed-domain"
 ```
 
 ---
