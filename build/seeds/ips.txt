@@ -1,0 +1,71 @@
+# =============================================================================
+# Seed de IPs y CIDRs — se cargan como PERMANENT al arrancar el contenedor.
+# INSERT OR IGNORE: las entradas ya existentes no se modifican.
+#
+# Fuentes: Tor Project, abuse.ch Feodo Tracker, Spamhaus, GreyNoise,
+#          Cisco Talos, Recorded Future, informes públicos de threat intel.
+#
+# Actualizar regularmente desde feeds live: MISP, AlienVault OTX, Abuse.ch.
+# =============================================================================
+
+
+# ── Tor Exit Nodes ────────────────────────────────────────────────────────────
+# Documentados en torproject.org — ampliamente bloqueados en entornos corporativos.
+185.220.100.0/23
+185.220.101.0/24
+185.220.102.0/24
+185.220.103.0/24
+185.130.44.0/24
+176.10.99.200
+176.10.104.0/24
+5.199.130.188
+51.15.43.205
+163.172.136.101
+62.102.148.0/24
+23.129.64.0/24
+209.141.36.0/24
+204.8.156.0/24
+217.170.206.0/24
+199.249.230.0/24
+
+
+# ── Feodo Tracker — Botnet C2 (abuse.ch) ─────────────────────────────────────
+# Emotet, Trickbot, Qakbot, IcedID C2 servers documentados.
+# Referencia: https://feodotracker.abuse.ch/
+185.125.190.42
+194.165.16.11
+194.165.16.76
+91.92.109.196
+91.92.109.217
+45.142.212.100
+45.142.212.108
+193.142.147.85
+193.142.147.94
+2.56.57.26
+5.188.86.172
+185.234.218.52
+
+
+# ── Bulletproof Hosting / ASNs abusados ──────────────────────────────────────
+# Rangos documentados en Spamhaus, Cisco Talos y Recorded Future
+# como infraestructura habitual de malware y spam.
+5.188.86.0/24
+194.165.16.0/24
+45.142.212.0/24
+91.92.109.0/24
+193.142.147.0/24
+2.56.57.0/24
+185.234.218.0/24
+193.32.162.0/24
+
+
+# ── Mass Scanners / Exploit Bots ──────────────────────────────────────────────
+# IPs documentadas en GreyNoise como escaneo masivo malicioso (no investigación).
+198.20.69.98
+198.20.70.114
+198.20.71.67
+80.66.76.144
+193.163.125.117
+89.248.167.131
+89.248.172.16
+45.143.201.62

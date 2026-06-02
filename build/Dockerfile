@@ -11,6 +11,7 @@ COPY build/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
+COPY build/seeds/ ./seeds/
 
 RUN mkdir -p /data \
     && useradd -r -u 1001 -s /sbin/nologin appuser \

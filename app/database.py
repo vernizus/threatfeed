@@ -1,8 +1,10 @@
+import ipaddress
 import os
 import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 DB_PATH = os.getenv("DB_PATH", "/data/threatfeed.db")
@@ -231,6 +233,54 @@ def get_stats() -> dict:
             "total_occurrences": total_occurrences,
         },
     }
+
+
+def _detect_type(element: str) -> str:
+    if "/" in element:
+        try:
+            ipaddress.ip_network(element, strict=False)
+            return "cidr"
+        except ValueError:
+            pass
+    try:
+        ipaddress.ip_address(element)
+        return "ip"
+    except ValueError:
+        return "domain"
+
+
+def seed_from_file(path: str) -> tuple[int, int]:
+    """
+    Load seed file and INSERT OR IGNORE each entry as permanent.
+    Auto-detects data_type (ip / cidr / domain) from content.
+    Does NOT touch threat_history — seed data should not inflate counters.
+    Returns (inserted, skipped).
+    """
+    file = Path(path)
+    if not file.exists():
+        return 0, 0
+
+    entries: list[tuple[str, str]] = []
+    for raw in file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        entries.append((line, _detect_type(line)))
+
+    if not entries:
+        return 0, 0
+
+    with _write_db() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM threat_feed").fetchone()[0]
+        conn.executemany(
+            "INSERT OR IGNORE INTO threat_feed "
+            "(element, data_type, entry_type, expires_at) VALUES (?, ?, 'permanent', NULL)",
+            entries,
+        )
+        after = conn.execute("SELECT COUNT(*) FROM threat_feed").fetchone()[0]
+
+    inserted = after - before
+    return inserted, len(entries) - inserted
 
 
 def get_history() -> list[dict]:

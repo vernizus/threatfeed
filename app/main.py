@@ -18,6 +18,7 @@ from .database import (
     get_temporary_feed,
     init_db,
     process_feed_entry,
+    seed_from_file,
 )
 from .models import (
     BulkFeedResponse,
@@ -34,6 +35,9 @@ _API_KEY: str = os.getenv("API_KEY", "changeme")
 _THRESHOLD: int = int(os.getenv("THRESHOLD_PROMOTION", "5"))
 _PROMOTION_ENABLED: bool = os.getenv("PROMOTION_ENABLED", "true").strip().lower() == "true"
 _DEBUG: bool = os.getenv("DEBUG", "false").strip().lower() == "true"
+_SEED_ENABLED: bool = os.getenv("SEED_ENABLED", "true").strip().lower() == "true"
+_SEED_IPS_FILE: str = os.getenv("SEED_IPS_FILE", "/app/seeds/ips.txt")
+_SEED_DOMAINS_FILE: str = os.getenv("SEED_DOMAINS_FILE", "/app/seeds/domains.txt")
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -41,6 +45,11 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    if _SEED_ENABLED:
+        for path, label in ((_SEED_IPS_FILE, "IPs/CIDRs"), (_SEED_DOMAINS_FILE, "domains")):
+            ins, skip = seed_from_file(path)
+            if ins or skip:
+                print(f"[seed] {label}: {ins} inserted, {skip} already present")
     yield
 
 

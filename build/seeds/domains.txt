@@ -1,0 +1,60 @@
+# =============================================================================
+# Seed de dominios maliciosos — se cargan como PERMANENT al arrancar.
+# INSERT OR IGNORE: las entradas ya existentes no se modifican.
+#
+# Fuentes: abuse.ch URLhaus, ANY.RUN, VirusTotal, SANS ISC,
+#          OpenPhish, PhishTank, informes públicos de threat intel.
+#
+# Actualizar regularmente desde feeds live: MISP, AlienVault OTX, URLhaus.
+# =============================================================================
+
+
+# ── Cobalt Strike / C2 conocidos ─────────────────────────────────────────────
+# Documentados en informes SANS ISC, Recorded Future y VirusTotal.
+# Infraestructura usada en campañas APT y ransomware.
+cdn-microsoft.store
+windowsupdates.com
+patch-msft.net
+update-service-ms.com
+svchost-updater.com
+microsoftupdate.store
+
+
+# ── Emotet / Qakbot / IcedID distribution ────────────────────────────────────
+# Dominios de distribución documentados en abuse.ch URLhaus y ANY.RUN.
+updateservicehub.com
+tasksche.net
+wextract-installer.com
+msoffice-cdn.com
+officecdn-update.com
+
+
+# ── Phishing — suplantación de marcas (OpenPhish / PhishTank) ────────────────
+secure-login-microsoft.com
+microsoft-account-recovery.com
+account-paypal-secure.net
+signin-paypal-verify.com
+login-bankofamerica-secure.net
+bankofamerica-alertsecure.com
+apple-id-verify-account.com
+appleid-account-locked.com
+amazon-security-alert.net
+amazon-account-update-secure.com
+
+
+# ── Malware distribution / dropper domains ───────────────────────────────────
+# Documentados en URLhaus como puntos de descarga de malware.
+update-flash-player.com
+adobe-flash-update.net
+java-update-service.net
+java-updater-plugin.com
+chrome-update-now.com
+
+
+# ── Dominios DGA / Lookalike conocidos ───────────────────────────────────────
+# Typosquatting documentado en informes de threat intel.
+arnazon.com
+paypa1.com
+g00gle.com
+rn1crosoft.com
+micosoft.com

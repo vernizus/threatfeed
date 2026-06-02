@@ -13,6 +13,12 @@ services:
       PROMOTION_ENABLED: ${PROMOTION_ENABLED:-true}
       DB_PATH: /data/threatfeed.db
       DEBUG: ${DEBUG:-false}
+
+      # ── Seed inicial ──────────────────────────────────────────────────────────
+      SEED_ENABLED: ${SEED_ENABLED:-true}
+      # SEED_IPS_FILE: /app/seeds/ips.txt       # path dentro del contenedor
+      # SEED_DOMAINS_FILE: /app/seeds/domains.txt
+
       # ── Variables custom (definelas en .env) ─────────────────────────────────
       # MY_VAR: ${MY_VAR:-default}
 
