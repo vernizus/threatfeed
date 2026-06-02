@@ -12,6 +12,7 @@
   Ambos scripts leen /var/ossec/etc/threatfeed.conf:
     THREATFEED_HOST="http://<host>:8000"
     THREATFEED_API_KEY="<clave>"
+    THREATFEED_DEDUP_WINDOW="300"
 
   Permisos de despliegue:
     chmod 750  /var/ossec/active-response/bin/threatfeed-add-ip.sh
