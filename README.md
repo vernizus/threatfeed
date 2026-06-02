@@ -76,6 +76,7 @@ Ver `docs/environment-variables.md` para referencia completa.
 
 ## Documentación
 
+- [Despliegue](docs/deploy.md)
 - [API Reference](docs/api-reference.md)
 - [Variables de entorno](docs/environment-variables.md)
 - [Integración FortiGate](docs/fortinet-integration.md)

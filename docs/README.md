@@ -77,4 +77,11 @@ Un elemento eliminado de la feed (`DELETE`) conserva su historial — si se vuel
 | DELETE | `/api/feed` | Sí | Eliminar un elemento de la feed |
 | GET | `/health` | No | Estado del servicio |
 
-La documentación interactiva (Swagger UI) está disponible en `http://localhost:8000/docs`.
+La documentación interactiva (Swagger UI) está disponible en `http://localhost:8000/docs` (requiere `DEBUG=true`).
+
+## Índice de documentación
+
+- [deploy.md](deploy.md) — Despliegue básico, producción con nginx+TLS, operaciones y troubleshooting
+- [api-reference.md](api-reference.md) — Todos los endpoints con ejemplos curl
+- [environment-variables.md](environment-variables.md) — Referencia completa de variables de entorno
+- [fortinet-integration.md](fortinet-integration.md) — Integración con FortiGate External Connectors
