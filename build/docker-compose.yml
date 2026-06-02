@@ -1,0 +1,49 @@
+services:
+  threatfeed:
+    build:
+      context: ..                  # project root — contains app/ and build/
+      dockerfile: build/Dockerfile
+    env_file:
+      - .env                       # cp .env.example .env antes de levantar
+    ports:
+      - "8000:8000"
+    environment:
+      API_KEY: ${API_KEY:?Copia .env.example a .env y rellena API_KEY}
+      THRESHOLD_PROMOTION: ${THRESHOLD_PROMOTION:-5}
+      PROMOTION_ENABLED: ${PROMOTION_ENABLED:-true}
+      DB_PATH: /data/threatfeed.db
+      DEBUG: ${DEBUG:-false}
+      # ── Variables custom (definelas en .env) ─────────────────────────────────
+      # MY_VAR: ${MY_VAR:-default}
+
+    volumes:
+      - threatfeed_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.50"
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # ── Servicios extra (nginx, redis…) ──────────────────────────────────────────
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - /etc/ssl/certs:/etc/ssl/certs:ro
+  #   depends_on:
+  #     - threatfeed
+
+volumes:
+  threatfeed_data:
+    driver: local

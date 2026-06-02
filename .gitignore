@@ -1,0 +1,17 @@
+# Entorno
+.env
+.venv/
+venv/
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker build cache
+.docker/

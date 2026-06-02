@@ -1,0 +1,7 @@
+# Forzar LF en todos los ficheros de texto — ignora core.autocrlf
+* text=auto eol=lf
+
+# Binarios — sin conversión
+*.db    binary
+*.db-wal binary
+*.db-shm binary
