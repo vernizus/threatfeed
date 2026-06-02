@@ -263,6 +263,18 @@ def get_active_feed_detail(data_types: list[str]) -> list[dict]:
 
 # ── Lookup ────────────────────────────────────────────────────────────────────
 
+def is_blocked(element: str) -> bool:
+    """Lightweight check — no auth needed. True if element is currently active in feed."""
+    now = _now_utc()
+    with _read_db() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM threat_feed WHERE element = ? "
+            "AND (entry_type='permanent' OR (entry_type='temporary' AND expires_at > ?)) LIMIT 1",
+            (element, now),
+        ).fetchone()
+    return row is not None
+
+
 def lookup_element(element: str) -> dict:
     now = _now_utc()
     with _read_db() as conn:

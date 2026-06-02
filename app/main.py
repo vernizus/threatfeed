@@ -22,6 +22,7 @@ from .database import (
     get_temporary_feed_detail,
     import_from_url,
     init_db,
+    is_blocked,
     lookup_element,
     process_feed_entry,
     seed_from_file,
@@ -271,14 +272,20 @@ def api_stats(request: Request) -> StatsResponse:
     )
 
 
-@app.get("/api/feed/lookup", response_model=LookupResponse, tags=["api"],
-         dependencies=[Depends(_require_api_key)],
-         summary="Look up a single element — returns feed status + history")
-@limiter.limit("60/minute")
+@app.get(
+    "/api/feed/lookup",
+    tags=["api"],
+    summary="Look up a single element. Without API key: returns {blocked: bool} only.",
+)
+@limiter.limit("120/minute")
 def api_lookup(
     request: Request,
     element: str = Query(..., max_length=253, description="IP, CIDR or domain to look up"),
-) -> LookupResponse:
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    if not _check_key(x_api_key):
+        # Public mode — minimal response, no internal details
+        return JSONResponse(content={"element": element, "blocked": is_blocked(element)})
     return LookupResponse(**lookup_element(element))
 
 
