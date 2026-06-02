@@ -24,6 +24,9 @@ services:
 
     volumes:
       - threatfeed_data:/data
+    # networks:
+    #   - default
+    #   - serv_ext_net          # red externa existente — descomentar si se necesita
     restart: unless-stopped
     deploy:
       resources:
@@ -53,3 +56,7 @@ services:
 volumes:
   threatfeed_data:
     driver: local
+
+# networks:
+#   serv_ext_net:
+#     external: true            # red creada fuera de este compose (docker network create serv_ext_net)
