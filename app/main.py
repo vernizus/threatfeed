@@ -11,7 +11,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from .database import (
+    add_whitelist,
     delete_feed,
+    delete_whitelist,
     get_active_feed,
     get_active_feed_detail,
     get_history,
@@ -20,12 +22,14 @@ from .database import (
     get_stats,
     get_temporary_feed,
     get_temporary_feed_detail,
+    get_whitelist,
     import_from_url,
     init_db,
     is_blocked,
     lookup_element,
     process_feed_entry,
     seed_from_file,
+    seed_whitelist_from_file,
 )
 from .models import (
     BulkFeedResponse,
@@ -40,6 +44,10 @@ from .models import (
     ImportResponse,
     LookupResponse,
     StatsResponse,
+    WhitelistCreate,
+    WhitelistDelete,
+    WhitelistItem,
+    WhitelistResponse,
 )
 
 _API_KEY: str = os.getenv("API_KEY", "changeme")
@@ -47,8 +55,10 @@ _THRESHOLD: int = int(os.getenv("THRESHOLD_PROMOTION", "5"))
 _PROMOTION_ENABLED: bool = os.getenv("PROMOTION_ENABLED", "true").strip().lower() == "true"
 _DEBUG: bool = os.getenv("DEBUG", "false").strip().lower() == "true"
 _SEED_ENABLED: bool = os.getenv("SEED_ENABLED", "true").strip().lower() == "true"
-_SEED_IPS_FILE: str = os.getenv("SEED_IPS_FILE", "/app/seeds/ips.txt")
-_SEED_DOMAINS_FILE: str = os.getenv("SEED_DOMAINS_FILE", "/app/seeds/domains.txt")
+_SEED_IPS_FILE: str = os.getenv("SEED_IPS_FILE", "/app/seeds/blacklist/ips.txt")
+_SEED_DOMAINS_FILE: str = os.getenv("SEED_DOMAINS_FILE", "/app/seeds/blacklist/domains.txt")
+_SEED_WHITELIST_FILE: str = os.getenv("SEED_WHITELIST_FILE", "/app/seeds/whitelist/ip.txt")
+_SEED_WHITELIST_DOMAINS_FILE: str = os.getenv("SEED_WHITELIST_DOMAINS_FILE", "/app/seeds/whitelist/domains.txt")
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -56,6 +66,14 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    # Seed whitelist PRIMERO — debe estar lista antes de procesar la blacklist
+    for wl_path, wl_label in (
+        (_SEED_WHITELIST_FILE, "whitelist/ips"),
+        (_SEED_WHITELIST_DOMAINS_FILE, "whitelist/domains"),
+    ):
+        wl_ins, wl_skip = seed_whitelist_from_file(wl_path)
+        if wl_ins or wl_skip:
+            print(f"[seed] {wl_label}: {wl_ins} inserted, {wl_skip} already present")
     if _SEED_ENABLED:
         for path, label in ((_SEED_IPS_FILE, "IPs/CIDRs"), (_SEED_DOMAINS_FILE, "domains")):
             ins, skip = seed_from_file(path)
@@ -117,6 +135,18 @@ def _process(payload: FeedCreate) -> FeedResponse:
         source=payload.source,
         comment=payload.comment,
     )
+    if result.get("whitelisted"):
+        return FeedResponse(
+            element=payload.element,
+            data_type=payload.data_type,
+            entry_type=payload.entry_type,
+            source=payload.source,
+            comment=payload.comment,
+            occurrences_count=0,
+            promoted_to_permanent=False,
+            whitelisted=True,
+            message="Whitelisted — skipped.",
+        )
     effective_type = (
         "permanent"
         if (result["promoted"] or payload.entry_type == "permanent")
@@ -130,6 +160,7 @@ def _process(payload: FeedCreate) -> FeedResponse:
         comment=payload.comment,
         occurrences_count=result["occurrences_count"],
         promoted_to_permanent=result["promoted"],
+        whitelisted=False,
         message=(
             f"Auto-promoted to permanent (threshold={_THRESHOLD} occurrences reached)."
             if result["promoted"]
@@ -353,6 +384,45 @@ def api_import(request: Request, payload: ImportFromUrl) -> ImportResponse:
 def api_delete(request: Request, payload: FeedDelete) -> dict:
     if not delete_feed(payload.element):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Element not found")
+    return {"deleted": payload.element}
+
+
+# ── Whitelist — solo API key, pisan siempre a la blacklist ───────────────────
+
+@app.get("/api/whitelist", response_model=WhitelistResponse, tags=["whitelist"],
+         dependencies=[Depends(_require_api_key)])
+@limiter.limit("30/minute")
+def api_whitelist_list(request: Request) -> WhitelistResponse:
+    items = get_whitelist()
+    return WhitelistResponse(
+        total=len(items),
+        items=[WhitelistItem(**i) for i in items],
+    )
+
+
+@app.post("/api/whitelist", tags=["whitelist"],
+          dependencies=[Depends(_require_api_key)],
+          summary="Add element to whitelist — overrides blacklist permanently")
+@limiter.limit("60/minute")
+def api_whitelist_add(request: Request, payload: WhitelistCreate) -> dict:
+    created = add_whitelist(payload.element, payload.comment)
+    return {
+        "element": payload.element,
+        "created": created,
+        "message": (
+            "Added to whitelist and removed from blacklist if present."
+            if created
+            else "Already whitelisted — comment updated."
+        ),
+    }
+
+
+@app.delete("/api/whitelist", tags=["whitelist"],
+            dependencies=[Depends(_require_api_key)])
+@limiter.limit("60/minute")
+def api_whitelist_delete(request: Request, payload: WhitelistDelete) -> dict:
+    if not delete_whitelist(payload.element):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Element not in whitelist")
     return {"deleted": payload.element}
 
 

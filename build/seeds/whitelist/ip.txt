@@ -1,0 +1,40 @@
+# =============================================================================
+# whitelist.txt — IPs/CIDRs que NUNCA deben bloquearse
+#
+# Cargado automáticamente al arrancar el servicio (antes que el seed de blacklist).
+# Añadir aquí: rangos LAN del cliente, DNS internos, IPs de management.
+# Estas entradas pisan siempre a la blacklist — si una IP está aquí,
+# nunca entrará en el feed aunque Wazuh dispare un AR sobre ella.
+# =============================================================================
+
+# ── RFC1918 — rangos privados ─────────────────────────────────────────────────
+10.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+
+# ── Loopback ──────────────────────────────────────────────────────────────────
+127.0.0.0/8
+::1
+
+# ── Link-local ────────────────────────────────────────────────────────────────
+169.254.0.0/16
+fe80::/10
+
+# ── IPv6 privado (ULA) ────────────────────────────────────────────────────────
+fc00::/7
+
+# ── DNS públicos conocidos (evitar bloqueo accidental) ───────────────────────
+8.8.8.8
+8.8.4.4
+1.1.1.1
+1.0.0.1
+9.9.9.9
+149.112.112.112
+
+# =============================================================================
+# Añadir aquí las IPs/rangos específicos del cliente:
+#
+# Ejemplo:
+#   203.0.113.0/24    # rango público oficina cliente
+#   198.51.100.5      # IP fija VPN administración
+# =============================================================================

@@ -1,0 +1,39 @@
+# =============================================================================
+# whitelist/domains.txt — Dominios que NUNCA deben bloquearse
+#
+# Cargado automáticamente al arrancar junto a whitelist.txt.
+# Añadir aquí: dominios corporativos del cliente, proveedores críticos,
+# servicios cloud propios, dominios de gestión interna.
+# Coincidencia exacta — para cubrir subdominios añadir cada uno por separado.
+# =============================================================================
+
+# ── Microsoft / Office 365 ────────────────────────────────────────────────────
+microsoft.com
+office.com
+office365.com
+microsoftonline.com
+live.com
+outlook.com
+windows.com
+windowsupdate.com
+update.microsoft.com
+
+# ── Google Workspace / servicios ─────────────────────────────────────────────
+google.com
+googleapis.com
+gstatic.com
+googleusercontent.com
+gmail.com
+
+# ── Wazuh / gestión ───────────────────────────────────────────────────────────
+wazuh.com
+packages.wazuh.com
+
+# =============================================================================
+# Añadir aquí los dominios específicos del cliente:
+#
+# Ejemplo:
+#   empresa.com
+#   mail.empresa.com
+#   vpn.empresa.com
+# =============================================================================

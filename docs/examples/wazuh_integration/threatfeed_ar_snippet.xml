@@ -5,22 +5,18 @@
   Añadir este bloque al ossec.conf del MANAGER (dentro de <ossec_config>).
   Los scripts deben estar en /var/ossec/active-response/bin/ en el manager.
 
-  FLUJO COMPLETO:
+  FLUJO:
     1. Wazuh detecta ataque → AR bloquea en el agente (netsh/iptables)
     2. threatfeed-add-ip.sh → envía srcip al Threat Feed (temporary 1-24h)
     3. Threat Feed acumula ocurrencias → promueve a permanent si supera umbral
-    4. sync_ips_atacantes.sh (cron cada 5 min):
-         GET /feed/ip/active → ips_atacantes CDB → Wazuh API compila lista
-    5. Regla 100202: próxima petición de esa IP → match en ips_atacantes
-         → AR firewall-drop 24h automático sin esperar a que dispare otra regla
+    4. sync_ips_atacantes.sh (cron 3am):
+         GET /feed/ip/active → escribe /var/ossec/etc/lists/ips_atacantes → wazuh-control reload
+    5. Regla 100202: próxima petición de IP conocida → match → firewall-drop 24h
 
   CONFIGURACION — /var/ossec/etc/threatfeed.conf:
-    THREATFEED_HOST="http://<host>:8000"
+    THREATFEED_HOST="http://<nombre-servicio-docker>:8000"
     THREATFEED_API_KEY="<clave>"
     THREATFEED_DEDUP_WINDOW="300"
-    WAZUH_API_HOST="https://localhost:55000"
-    WAZUH_API_USER="wazuh-wui"          # o cualquier usuario con permiso lists:update
-    WAZUH_API_PASS="<password>"
 
   DESPLIEGUE:
     cp threatfeed-add-ip.sh     /var/ossec/active-response/bin/
@@ -36,14 +32,8 @@
     chown root:wazuh /var/ossec/etc/threatfeed.conf
 
   CRON en el HOST — /etc/cron.d/threatfeed-sync:
-    # Actualiza ips_atacantes CDB y recarga Wazuh cada noche a las 3am
     0 3 * * * root docker exec wazuh-manager \
         /var/ossec/active-response/bin/sync_ips_atacantes.sh
-
-  threatfeed.conf (sin credenciales):
-    THREATFEED_HOST="http://<nombre-servicio-docker>:8000"   # ej. http://threatfeed:8000
-    THREATFEED_API_KEY="<clave>"
-    THREATFEED_DEDUP_WINDOW="300"
   =============================================================================
 -->
 

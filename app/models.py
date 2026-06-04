@@ -61,6 +61,7 @@ class FeedResponse(BaseModel):
     comment: Optional[str]
     occurrences_count: int
     promoted_to_permanent: bool
+    whitelisted: bool = False
     message: Optional[str] = None
 
 
@@ -165,6 +166,33 @@ class ImportResponse(BaseModel):
     skipped_duplicate: int
     skipped_invalid: int
     total_parsed: int
+
+
+# ── Whitelist ─────────────────────────────────────────────────────────────────
+
+class WhitelistCreate(BaseModel):
+    element: str = Field(..., max_length=_MAX_ELEMENT_LEN)
+    comment: Optional[str] = Field(None, max_length=_MAX_COMMENT_LEN)
+
+    @model_validator(mode="after")
+    def _validate(self) -> "WhitelistCreate":
+        self.element = self.element.strip()
+        return self
+
+
+class WhitelistDelete(BaseModel):
+    element: str = Field(..., max_length=_MAX_ELEMENT_LEN)
+
+
+class WhitelistItem(BaseModel):
+    element: str
+    comment: Optional[str]
+    created_at: str
+
+
+class WhitelistResponse(BaseModel):
+    total: int
+    items: list[WhitelistItem]
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────

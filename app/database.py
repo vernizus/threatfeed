@@ -78,6 +78,13 @@ def init_db() -> None:
                 last_seen         TEXT    NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS threat_whitelist (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                element    TEXT    NOT NULL UNIQUE,
+                comment    TEXT,
+                created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            );
+
             CREATE INDEX IF NOT EXISTS idx_feed_dtype_etype
                 ON threat_feed(data_type, entry_type);
 
@@ -93,6 +100,95 @@ def init_db() -> None:
                 conn.execute(f"ALTER TABLE threat_feed ADD COLUMN {col} {definition}")
             except sqlite3.OperationalError:
                 pass  # column already exists
+
+
+# ── Whitelist ─────────────────────────────────────────────────────────────────
+
+def is_whitelisted(element: str) -> bool:
+    """True si element coincide exactamente o cae dentro de un CIDR de la whitelist."""
+    with _read_db() as conn:
+        wl = [r["element"] for r in conn.execute("SELECT element FROM threat_whitelist").fetchall()]
+    if not wl:
+        return False
+    try:
+        if "/" in element:
+            el_net = ipaddress.ip_network(element, strict=False)
+            for w in wl:
+                try:
+                    if el_net.subnet_of(ipaddress.ip_network(w, strict=False)):
+                        return True
+                except (ValueError, TypeError):
+                    if w == element:
+                        return True
+        else:
+            el_ip = ipaddress.ip_address(element)
+            for w in wl:
+                if w == element:
+                    return True
+                try:
+                    if el_ip in ipaddress.ip_network(w, strict=False):
+                        return True
+                except ValueError:
+                    pass
+    except ValueError:
+        # dominio — coincidencia exacta
+        return element in wl
+    return False
+
+
+def add_whitelist(element: str, comment: Optional[str] = None) -> bool:
+    """Añade a la whitelist. Si ya existe, actualiza el comment. Devuelve True si fue nuevo."""
+    with _write_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM threat_whitelist WHERE element = ?", (element,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE threat_whitelist SET comment = ? WHERE element = ?", (comment, element)
+            )
+            return False
+        conn.execute(
+            "INSERT INTO threat_whitelist (element, comment) VALUES (?, ?)", (element, comment)
+        )
+        # Eliminar de la blacklist si estaba
+        conn.execute("DELETE FROM threat_feed WHERE element = ?", (element,))
+        return True
+
+
+def delete_whitelist(element: str) -> bool:
+    with _write_db() as conn:
+        cursor = conn.execute("DELETE FROM threat_whitelist WHERE element = ?", (element,))
+        return cursor.rowcount > 0
+
+
+def get_whitelist() -> list[dict]:
+    with _read_db() as conn:
+        rows = conn.execute(
+            "SELECT element, comment, created_at FROM threat_whitelist ORDER BY element"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def seed_whitelist_from_file(path: str) -> tuple[int, int]:
+    file = Path(path)
+    if not file.exists():
+        return 0, 0
+    entries = []
+    for raw in file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        entries.append(line)
+    if not entries:
+        return 0, 0
+    with _write_db() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM threat_whitelist").fetchone()[0]
+        conn.executemany(
+            "INSERT OR IGNORE INTO threat_whitelist (element) VALUES (?)",
+            [(e,) for e in entries],
+        )
+        after = conn.execute("SELECT COUNT(*) FROM threat_whitelist").fetchone()[0]
+    return after - before, len(entries) - (after - before)
 
 
 # ── Core write operation ──────────────────────────────────────────────────────
@@ -112,6 +208,10 @@ def process_feed_entry(
     Permanent entries: entry_type/expires_at never downgrade, but source/comment always update.
     Returns {"occurrences_count": int, "promoted": bool}
     """
+    # Whitelist tiene prioridad absoluta — nunca se añade ni se bloquea
+    if is_whitelisted(element):
+        return {"occurrences_count": 0, "promoted": False, "whitelisted": True}
+
     with _write_db() as conn:
         existing = conn.execute(
             "SELECT entry_type FROM threat_feed WHERE element = ?", (element,)
@@ -166,7 +266,7 @@ def process_feed_entry(
             )
             promoted = cursor.rowcount > 0
 
-        return {"occurrences_count": count, "promoted": promoted}
+        return {"occurrences_count": count, "promoted": promoted, "whitelisted": False}
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────
@@ -375,8 +475,14 @@ def import_from_url(
             "inserted": 0,
             "skipped_duplicate": 0,
             "skipped_invalid": invalid,
+            "skipped_whitelist": 0,
             "total_parsed": invalid,
         }
+
+    # Filtrar entradas en whitelist antes de insertar
+    wl_skip = [(e, dt) for e, dt in entries if is_whitelisted(e)]
+    entries  = [(e, dt) for e, dt in entries if not is_whitelisted(e)]
+    wl_count = len(wl_skip)
 
     with _write_db() as conn:
         before = conn.execute("SELECT COUNT(*) FROM threat_feed").fetchone()[0]
@@ -393,7 +499,8 @@ def import_from_url(
         "inserted": inserted,
         "skipped_duplicate": len(entries) - inserted,
         "skipped_invalid": invalid,
-        "total_parsed": len(entries) + invalid,
+        "skipped_whitelist": wl_count,
+        "total_parsed": len(entries) + invalid + wl_count,
     }
 
 
