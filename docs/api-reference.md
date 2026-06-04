@@ -23,6 +23,9 @@ Swagger interactivo: `http://<host>:8000/docs` (solo con `DEBUG=true`).
 | POST | `/api/feed/bulk` | Sí | Importar hasta 500 elementos |
 | POST | `/api/feed/import` | Sí | Descargar feed remoto desde URL |
 | DELETE | `/api/feed` | Sí | Eliminar un elemento |
+| GET | `/api/whitelist` | Sí | Listar entradas de la whitelist |
+| POST | `/api/whitelist` | Sí | Añadir a la whitelist (pisa blacklist) |
+| DELETE | `/api/whitelist` | Sí | Eliminar de la whitelist |
 | GET | `/health` | No | Estado del servicio |
 
 \* `?detail=true` requiere `X-API-Key`.
@@ -325,9 +328,12 @@ curl -X POST http://localhost:8000/api/feed/import \
   "inserted": 287,
   "skipped_duplicate": 12,
   "skipped_invalid": 3,
+  "skipped_whitelist": 2,
   "total_parsed": 302
 }
 ```
+
+> `skipped_whitelist` — entradas presentes en la whitelist que se ignoraron durante la importación.
 
 ### Feeds públicos compatibles
 
@@ -355,6 +361,85 @@ curl -X DELETE http://localhost:8000/api/feed \
 
 ```json
 {"deleted": "1.2.3.4"}
+```
+
+---
+
+## Whitelist — `GET /api/whitelist` · `POST /api/whitelist` · `DELETE /api/whitelist`
+
+La whitelist tiene **prioridad absoluta** sobre la blacklist. Un elemento whitelisteado nunca entra en el feed, aunque Wazuh dispare un AR sobre él. Además, al añadirlo se elimina de la blacklist si estuviera presente.
+
+Se carga automáticamente al arrancar desde `seeds/whitelist/ip.txt` y `seeds/whitelist/domains.txt` antes que cualquier seed de blacklist.
+
+### `GET /api/whitelist`
+
+```bash
+curl http://localhost:8000/api/whitelist \
+  -H "X-API-Key: $API_KEY"
+```
+
+```json
+{
+  "total": 3,
+  "items": [
+    {"element": "192.168.0.0/16", "comment": "Red interna cliente", "created_at": "2026-06-04T08:00:00Z"},
+    {"element": "10.0.0.0/8",     "comment": null,                  "created_at": "2026-06-04T08:00:00Z"},
+    {"element": "empresa.com",    "comment": "Dominio corporativo",  "created_at": "2026-06-04T08:00:00Z"}
+  ]
+}
+```
+
+### `POST /api/whitelist`
+
+Añade un elemento. Si ya existía, actualiza el `comment`. Si estaba en la blacklist, lo elimina de allí.
+
+```bash
+curl -X POST http://localhost:8000/api/whitelist \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element": "203.0.113.0/24", "comment": "Rango público oficina cliente"}'
+```
+
+```json
+{
+  "element": "203.0.113.0/24",
+  "created": true,
+  "message": "Added to whitelist and removed from blacklist if present."
+}
+```
+
+### `DELETE /api/whitelist`
+
+```bash
+curl -X DELETE http://localhost:8000/api/whitelist \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"element": "203.0.113.0/24"}'
+```
+
+```json
+{"deleted": "203.0.113.0/24"}
+```
+
+### Comportamiento de coincidencia
+
+| Intento de bloqueo | Whitelist contiene | Resultado |
+|---|---|---|
+| `192.168.1.50` | `192.168.0.0/16` | Whitelisted (IP dentro del CIDR) |
+| `10.5.0.0/24` | `10.0.0.0/8` | Whitelisted (CIDR contenido en CIDR) |
+| `empresa.com` | `empresa.com` | Whitelisted (coincidencia exacta) |
+| `1.2.3.4` | `192.168.0.0/16` | No whitelisted — entra en blacklist |
+
+La respuesta de `POST /api/feed` incluye `"whitelisted": true` cuando el elemento fue ignorado por estar en la whitelist:
+
+```json
+{
+  "element": "192.168.1.50",
+  "whitelisted": true,
+  "occurrences_count": 0,
+  "promoted_to_permanent": false,
+  "message": "Whitelisted — skipped."
+}
 ```
 
 ---

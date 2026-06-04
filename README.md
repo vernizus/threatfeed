@@ -9,10 +9,11 @@ Microservicio REST de listas de bloqueo dinámicas (IPs, CIDRs, Dominios) con si
 - Bloqueos **permanentes** y **temporales** (expiración en segundos)
 - **Historial de reincidencias** — contador por elemento, trazabilidad de origen (`source`) y notas operacionales (`comment`)
 - **Promoción automática** — los temporales escalan a permanentes al superar un umbral configurable
+- **Whitelist con prioridad absoluta** — IPs, CIDRs y dominios que nunca se bloquean; pisa cualquier regla de blacklist; coincidencia CIDR para IPs
 - **Importación masiva** — hasta 500 elementos por petición o descarga directa desde URLs de threat feeds públicos (Feodo Tracker, Emerging Threats…)
 - **Lookup** — consulta puntual con o sin API key (modo público: solo `blocked: true/false`)
 - **Modo detail** — los feeds devuelven JSON con `source` y `comment` para herramientas SOC (`?detail=true`)
-- **Seed inicial** — listas preconfiguradas de IPs y dominios maliciosos conocidos (Tor exits, Feodo C2, phishing…)
+- **Seeds organizados** — `seeds/blacklist/` para IPs y dominios maliciosos; `seeds/whitelist/` para IPs y dominios permitidos (RFC1918, loopback, DNS, dominios corporativos)
 - Rate limiting, comparación de API key en tiempo constante, Swagger deshabilitado en producción
 
 ## Integraciones
@@ -75,8 +76,12 @@ threatfeed/
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── seeds/
-│       ├── ips.txt               — IPs/CIDRs maliciosos conocidos
-│       └── domains.txt           — dominios maliciosos conocidos
+│       ├── blacklist/
+│       │   ├── ips.txt           — IPs/CIDRs maliciosos conocidos
+│       │   └── domains.txt       — dominios maliciosos conocidos
+│       └── whitelist/
+│           ├── ip.txt            — IPs/CIDRs permitidos (RFC1918, loopback, DNS…)
+│           └── domains.txt       — dominios permitidos (corporativos, Microsoft, Google…)
 └── docs/
     ├── deploy.md
     ├── api-reference.md
@@ -88,6 +93,7 @@ threatfeed/
         └── wazuh_integration/
             ├── threatfeed-add-ip.sh       — AR script para IPs
             ├── threatfeed-add-domain.sh   — AR script para dominios
+            ├── sync_ips_atacantes.sh      — sync feed → Wazuh CDB (cron 3am)
             └── threatfeed_ar_snippet.xml  — bloque ossec.conf
 ```
 
@@ -114,6 +120,9 @@ curl http://localhost:8000/health
 | `POST /api/feed/import` | Sí | Descargar feed desde URL (Feodo, ET…) |
 | `GET /feed/history` | Sí | Historial de reincidencias |
 | `GET /api/stats` | Sí | Estadísticas y configuración activa |
+| `GET /api/whitelist` | Sí | Listar entradas de la whitelist |
+| `POST /api/whitelist` | Sí | Añadir a whitelist (elimina de blacklist si estaba) |
+| `DELETE /api/whitelist` | Sí | Eliminar de la whitelist |
 
 Auth: cabecera `X-API-Key: <API_KEY>`. Swagger en `/docs` solo con `DEBUG=true`.
 
@@ -124,7 +133,11 @@ Auth: cabecera `X-API-Key: <API_KEY>`. Swagger en `/docs` solo con `DEBUG=true`.
 | `API_KEY` | — | **Requerida.** Clave para endpoints protegidos |
 | `THRESHOLD_PROMOTION` | `5` | Ocurrencias para promover a permanente |
 | `PROMOTION_ENABLED` | `true` | Activar/desactivar la promoción automática |
-| `SEED_ENABLED` | `true` | Sembrar listas iniciales al arrancar |
+| `SEED_ENABLED` | `true` | Sembrar blacklists al arrancar |
+| `SEED_IPS_FILE` | `/app/seeds/blacklist/ips.txt` | Seed de IPs/CIDRs maliciosos |
+| `SEED_DOMAINS_FILE` | `/app/seeds/blacklist/domains.txt` | Seed de dominios maliciosos |
+| `SEED_WHITELIST_FILE` | `/app/seeds/whitelist/ip.txt` | Seed de IPs/CIDRs permitidos |
+| `SEED_WHITELIST_DOMAINS_FILE` | `/app/seeds/whitelist/domains.txt` | Seed de dominios permitidos |
 | `DEBUG` | `false` | Habilita Swagger UI en `/docs` |
 
 Ver [`docs/environment-variables.md`](docs/environment-variables.md) para referencia completa.

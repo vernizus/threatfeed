@@ -47,6 +47,38 @@ PROMOTION_ENABLED=false  # Se sigue contando el historial, pero nunca se promuev
 
 ---
 
+### `SEED_IPS_FILE`
+
+**Default:** `/app/seeds/blacklist/ips.txt`
+
+Ruta del fichero de IPs/CIDRs maliciosos que se cargan como `permanent` al arrancar.
+
+---
+
+### `SEED_DOMAINS_FILE`
+
+**Default:** `/app/seeds/blacklist/domains.txt`
+
+Ruta del fichero de dominios maliciosos que se cargan como `permanent` al arrancar.
+
+---
+
+### `SEED_WHITELIST_FILE`
+
+**Default:** `/app/seeds/whitelist/ip.txt`
+
+Ruta del fichero de IPs/CIDRs que nunca deben bloquearse. Se carga **antes** que los seeds de blacklist. Incluye por defecto RFC1918, loopback y DNS públicos conocidos.
+
+---
+
+### `SEED_WHITELIST_DOMAINS_FILE`
+
+**Default:** `/app/seeds/whitelist/domains.txt`
+
+Ruta del fichero de dominios que nunca deben bloquearse. Se carga junto al seed de whitelist de IPs.
+
+---
+
 ### `DB_PATH`
 
 **Default:** `/data/threatfeed.db`
@@ -65,6 +97,10 @@ DB_PATH=/data/threatfeed.db
 API_KEY=s3cr3t-k3y-ch4nge-m3-in-pr0duction
 THRESHOLD_PROMOTION=5
 PROMOTION_ENABLED=true
+SEED_IPS_FILE=/app/seeds/blacklist/ips.txt
+SEED_DOMAINS_FILE=/app/seeds/blacklist/domains.txt
+SEED_WHITELIST_FILE=/app/seeds/whitelist/ip.txt
+SEED_WHITELIST_DOMAINS_FILE=/app/seeds/whitelist/domains.txt
 ```
 
 Lanzar con:
